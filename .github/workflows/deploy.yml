@@ -1,0 +1,111 @@
+name: Deploy bots to EC2
+
+# Triggers on every push to main. The self-hosted runner polls GitHub
+# every few seconds, picks up the job, runs it directly on the EC2 box,
+# and rebuilds the affected containers.
+#
+# We deliberately do NOT use GitHub-hosted runners + SSH — it would
+# require opening SSH to GitHub's IP ranges and storing an SSH key in
+# GitHub Secrets, both of which widen the attack surface. Self-hosted
+# runner is pull-based: EC2 initiates the connection, GitHub never
+# initiates anything inbound. The security group stays SSH-only.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'bots/tickets/**'
+      - 'infrastructure/terraform-tickets/**'
+      - '.github/workflows/deploy-tickets.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64, telegram-bots]
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out monorepo
+        uses: actions/checkout@v4
+        with:
+          clean: false   # keep untracked files so symlinks below survive
+
+      - name: Wire persistent secrets and data into the workspace
+        # The runner checks out into ~/actions-runner/_work/<repo>/<repo>/.
+        # That directory is blown away on a clean checkout, so we keep
+        # the real secrets and bot state OUTSIDE of it and symlink them
+        # back in on every deploy.
+        #
+        # Required on the EC2 host (set up once by hand — see docs/DEPLOY.md):
+        #   /etc/telegram-bots/.env                 (the monorepo .env)
+        #   /etc/telegram-bots/leocard/credentials.json + token.json
+        #   /etc/telegram-bots/profcom/credentials.json + token.json
+        #   /var/lib/telegram-bots/data/            (PicklePersistence,
+        #                                            generated_petitions,
+        #                                            notification_chats.json)
+        run: |
+          set -euxo pipefail
+
+          # --- .env ---
+          ln -sf /etc/telegram-bots/.env .env
+
+          # --- Google credential files ---
+          for bot in leocard profcom; do
+            mkdir -p data/$bot
+            ln -sf /etc/telegram-bots/$bot/credentials.json data/$bot/credentials.json
+            ln -sf /etc/telegram-bots/$bot/token.json       data/$bot/token.json
+          done
+
+          # --- Persistent state directories ---
+          # bot_persistence, generated_petitions, notification_chats.json
+          # all live outside the workspace so `git clean` can't trash them.
+          sudo mkdir -p /var/lib/telegram-bots/data/leocard/bot_persistence \
+                        /var/lib/telegram-bots/data/profcom/generated_petitions \
+                        /var/lib/telegram-bots/data/shared
+          [ -f /var/lib/telegram-bots/data/shared/notification_chats.json ] || \
+            echo '{"chat_ids": []}' | sudo tee /var/lib/telegram-bots/data/shared/notification_chats.json > /dev/null
+          sudo chown -R $(id -u):$(id -g) /var/lib/telegram-bots/data
+
+          rm -rf data/leocard/bot_persistence data/profcom/generated_petitions
+          ln -sf /var/lib/telegram-bots/data/leocard/bot_persistence   data/leocard/bot_persistence
+          ln -sf /var/lib/telegram-bots/data/profcom/generated_petitions data/profcom/generated_petitions
+          mkdir -p data/shared
+          ln -sf /var/lib/telegram-bots/data/shared/notification_chats.json data/shared/notification_chats.json
+
+      - name: Pre-flight checks
+        run: |
+          set -e
+          test -s .env || { echo "::error::.env is empty"; exit 1; }
+          test -s data/leocard/token.json || { echo "::error::leocard token.json missing"; exit 1; }
+          test -s data/profcom/token.json || { echo "::error::profcom token.json missing"; exit 1; }
+
+
+      - name: Build and restart containers
+        run: |
+          set -euxo pipefail
+          docker compose pull 2>/dev/null || true
+          docker compose build
+          docker compose up -d --remove-orphans
+
+      - name: Prune dangling images (free disk on the t3.micro)
+        run: docker image prune -f
+
+      - name: Show container status
+        run: docker compose ps
+
+      - name: Smoke-test — every bot must be in 'running' state
+        run: |
+          set -e
+          for svc in leocard newbie profcom; do
+            status=$(docker inspect -f '{{.State.Status}}' ${svc}_bot 2>/dev/null || echo "missing")
+            echo "$svc → $status"
+            if [ "$status" != "running" ]; then
+              echo "::error::$svc is not running (status=$status). Dumping logs:"
+              docker compose logs --tail=80 $svc || true
+              exit 1
+            fi
+          done

@@ -1,0 +1,48 @@
+# Secrets
+.env
+*.env
+!.env.example
+
+# Google OAuth dumps — never commit
+credentials.json
+token.json
+*credentials*.json
+*token*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+.Python
+
+# Runtime state
+bots/leocard/bot_persistence/
+bots/profcom/generated_petitions/
+data/shared/notification_chats.json
+
+# Logs
+*.log
+logs/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Terraform (main)
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.backup
+infrastructure/terraform/*.tfvars
+!infrastructure/terraform/terraform.tfvars.example
+infrastructure/terraform/.terraform.lock.hcl
+infrastructure/terraform/crash.log
+
+# SSH keys (should live outside the repo, but just in case)
+*.pem
+id_rsa*

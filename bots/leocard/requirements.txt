@@ -1,0 +1,20 @@
+# Telegram Bot
+python-telegram-bot[job-queue]>=20.0
+
+# Google API
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+gspread
+
+# Computer Vision & OCR
+opencv-python-headless
+pytesseract
+Pillow
+
+# PDF Processing
+PyMuPDF
+
+# Utilities
+python-dotenv
+numpy

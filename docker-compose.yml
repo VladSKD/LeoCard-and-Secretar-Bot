@@ -1,0 +1,111 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Unified orchestration for three bots (leocard, newbie, profcom).
+# The tickets bot has its own EC2 instance — see bots/tickets/docker-compose.yml.
+#
+# Design notes
+# ────────────
+# • Each bot keeps its own Dockerfile under bots/<name>/ — they have wildly
+#   different system deps (Leocard needs tesseract + opencv, the rest don't).
+#
+# • The shared/ directory is bind-mounted read-only into every container so
+#   that `from shared.logging_config import setup_logging` works identically
+#   everywhere.
+#
+# • Env vars are REMAPPED per service: the .env file stores prefixed names
+#   (LEOCARD_*, PROFCOM_*) so secrets don't collide, but each
+#   container sees them under the plain names its Python code already
+#   expects. No code edits.
+#
+# • Google credentials policy:
+#     ├─ Leocard / Profcom use OAuth 2.0 user credentials. Their
+#     │  `credentials.json` + `token.json` live on the HOST at
+#     │  data/<bot>/, bind-mounted into /app/. The google-auth library
+#     │  refreshes access tokens automatically and writes the updated
+#     │  token.json back through the mount — so refreshes survive
+#     │  container restarts without any code changes.
+#     │
+#     │  (Env-var bootstrap is gone — the files are the source of truth.
+#     │  See docs/DEPLOY.md for how to produce them once and drop them in.)
+#     │
+#
+# • Stateful bits (PicklePersistence, generated_petitions, notification_chats,
+#   Google tokens) live on host bind mounts so container restarts don't lose
+#   anything.
+#
+# • Every service has `restart: unless-stopped` — if one bot crashes,
+#   Docker brings it back without affecting the others.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  leocard:
+    container_name: leocard_bot
+    build:
+      context: ./bots/leocard
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./data/leocard/credentials.json:/app/credentials.json:ro
+      - ./data/leocard/token.json:/app/token.json
+      - ./data/leocard/bot_persistence:/app/bot_persistence
+      - ./data/shared/notification_chats.json:/app/notification_chats.json:ro
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TELEGRAM_BOT_TOKEN: ${LEOCARD_TELEGRAM_BOT_TOKEN}
+      GOOGLE_ROOT_FOLDER_ID: ${LEOCARD_GOOGLE_ROOT_FOLDER_ID}
+      PAYMENT_URL: ${LEOCARD_PAYMENT_URL}
+      ADMIN_CHAT_ID: ${LEOCARD_ADMIN_CHAT_ID}
+      TEMPLATE_SPREADSHEET_ID: ${LEOCARD_TEMPLATE_SPREADSHEET_ID}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  newbie:
+    container_name: newbie_bot
+    build:
+      context: ./bots/newbie
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ./shared:/app/shared:ro
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      BOT_TOKEN: ${NEWBIE_BOT_TOKEN}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  profcom:
+    container_name: profcom_bot
+    build:
+      context: ./bots/profcom
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      # Health-check endpoint. Exposed only on localhost so the VPC stays
+      # closed — use `curl http://127.0.0.1:10000/` when SSH'd into the box.
+      - "127.0.0.1:${PROFCOM_PORT:-10000}:10000"
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./data/profcom/credentials.json:/app/credentials.json:ro
+      - ./data/profcom/token.json:/app/token.json
+      - ./data/profcom/generated_petitions:/app/generated_petitions
+      - ./data/shared/notification_chats.json:/app/notification_chats.json
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TELEGRAM_BOT_TOKEN: ${PROFCOM_TELEGRAM_BOT_TOKEN}
+      GOOGLE_API_KEY: ${PROFCOM_GOOGLE_API_KEY}
+      GDRIVE_FOLDER_ID: ${PROFCOM_GDRIVE_FOLDER_ID}
+      GOOGLE_SHEET_ID: ${PROFCOM_GOOGLE_SHEET_ID}
+      NOTIFICATION_CHATS: ${PROFCOM_NOTIFICATION_CHATS}
+      PORT: "10000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
