@@ -101,7 +101,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/help — ця довідка\n"
         "/cancel — скасувати поточну заявку\n\n"
         "Якщо виникли проблеми — пишіть:\n"
-        "@relimusii або @hmelnykk"
+        "@ajg473"
     )
 
 
