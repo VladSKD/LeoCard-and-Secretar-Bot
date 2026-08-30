@@ -73,8 +73,8 @@ def ensure_google_auth_on_startup() -> None:
     AWAITING_FULL_NAME_CONFIRMATION, AWAITING_STUDENT_ID, AWAITING_POLITECH_EMAIL,
     AWAITING_PHONE_NUMBER, AWAITING_PHOTO_3X4, AWAITING_RESIDENCY_EXTRACT,
     AWAITING_FILLED_FORMS, AWAITING_PAYMENT_CHOICE, AWAITING_PAYMENT_RECEIPT,
-    AWAITING_STUDENT_VALID_UNTIL,
-) = range(17)
+    AWAITING_STUDENT_VALID_UNTIL, AWAITING_CERTIFICATE_PHOTO,
+) = range(18)
 
 
 # --- KLAVIATURY (Helper) ---
@@ -381,26 +381,29 @@ async def handle_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def handle_no_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    # Вкажіть шлях до файлу, який має підставлятися замість студентського
-    fallback_doc_path = "examples/no_student_id_doc.jpg"
+    await update.message.reply_text("Надішліть фото вашої довідки (або іншого документа-замінника).", reply_markup=get_back_keyboard())
     
+    # Надсилаємо приклад, як ви і просили
     try:
-        with open(fallback_doc_path, "rb") as f:
-            file_buffer = io.BytesIO(f.read())
-        # Зберігаємо його під ключем студентського квитка, щоб порядок у PDF не змінився[cite: 1, 4]
-        context.user_data[fn.student_id] = file_buffer
-    except Exception as e:
-        logger.error(f"Failed to load fallback student doc: {e}")
-        await update.message.reply_text("Помилка завантаження документа-замінника. Зверніться до адміністратора.")
-        return AWAITING_STUDENT_ID
+        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=open("examples/no_student_id_doc.jpg", "rb"))
+    except:
+        pass
 
-    # Відправляємо повідомлення про успіх та запитуємо дату одним повідомленням[cite: 1]
+    return AWAITING_CERTIFICATE_PHOTO
+
+async def handle_certificate_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    photo_file = await update.message.photo[-1].get_file()
+    file_buffer = io.BytesIO()
+    await photo_file.download_to_memory(file_buffer)
+    
+    # Зберігаємо на місце студентського квитка
+    context.user_data[fn.student_id] = file_buffer
+
+    # Питаємо дату
     await update.message.reply_text(
-        "Документ автоматично прикріплено.\n"
-        "Введіть дату дійсності вашого документа (наприклад, довідки) у форматі ДД.ММ.РРРР:",
+        "Документ збережено!\nВведіть дату дійсності вашого документа у форматі ДД.ММ.РРРР:",
         reply_markup=get_back_keyboard()
     )
-    
     return AWAITING_STUDENT_VALID_UNTIL
 
 async def handle_student_valid_until(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -754,6 +757,11 @@ def main():
                 MessageHandler(filters.Regex(f'^{re.escape(btn.no_student_id)}$'), handle_no_student_id),
                 MessageHandler(filters.PHOTO, handle_student_id),
                 MessageHandler(_no_cmd, _reject("Надішліть фото студентського квитка.")),
+            ],
+            AWAITING_CERTIFICATE_PHOTO: [
+                MessageHandler(back_filter, back_to_student_id),
+                MessageHandler(filters.PHOTO, handle_certificate_photo),
+                MessageHandler(_no_cmd, _reject("Надішліть фото довідки.")),
             ],
             AWAITING_STUDENT_VALID_UNTIL: [
                 MessageHandler(back_filter, back_to_student_id),
