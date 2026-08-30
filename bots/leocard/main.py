@@ -445,6 +445,15 @@ async def handle_filled_forms(update: Update, context: ContextTypes.DEFAULT_TYPE
     if len(forms) == 0:
         forms.append(file_buffer)
         await update.message.reply_text("Отримано 1 сторінку. Надішліть 2 сторінку.", reply_markup=get_back_keyboard())
+        
+        # --- Додано відправку прикладу 2 сторінки ---
+        try:
+            await context.bot.send_photo(chat_id=update.effective_chat.id,
+                                         photo=open("./examples/document_page_2_example.jpg", "rb"))
+        except:
+            pass
+        # ---------------------------------------------
+            
         return AWAITING_FILLED_FORMS
     else:
         forms.append(file_buffer)
