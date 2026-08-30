@@ -318,7 +318,11 @@ async def handle_photo_3x4(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     file_buffer = io.BytesIO()
     await photo_file.download_to_memory(file_buffer)
     context.user_data[fn.photo_3x4] = file_buffer
-    await update.message.reply_text("Надішліть фото студентського.", reply_markup=get_back_keyboard())
+    
+    # Додаємо кнопку "В мене нема студентського" до клавіатури
+    keyboard = get_back_keyboard([[btn.no_student_id]])
+    await update.message.reply_text("Надішліть фото студентського.", reply_markup=keyboard)
+    
     try:
         await context.bot.send_photo(chat_id=update.effective_chat.id,
                                      photo=open("examples/student_id_example.png", "rb"))
@@ -365,7 +369,7 @@ async def handle_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                                         reply_markup=get_back_keyboard())
         try:
             await context.bot.send_photo(chat_id=update.effective_chat.id,
-                                         photo=open("./examples/document_page_1_example.png", "rb"))
+                                         photo=open("./examples/document_page_1_example.jpg", "rb"))
         except:
             pass
         context.user_data["filled_forms"] = []
@@ -375,6 +379,29 @@ async def handle_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                                         reply_markup=get_back_keyboard())
         return AWAITING_STUDENT_VALID_UNTIL
 
+
+async def handle_no_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Вкажіть шлях до файлу, який має підставлятися замість студентського
+    fallback_doc_path = "examples/no_student_id_doc.jpg"
+    
+    try:
+        with open(fallback_doc_path, "rb") as f:
+            file_buffer = io.BytesIO(f.read())
+        # Зберігаємо його під ключем студентського квитка, щоб порядок у PDF не змінився[cite: 1, 4]
+        context.user_data[fn.student_id] = file_buffer
+    except Exception as e:
+        logger.error(f"Failed to load fallback student doc: {e}")
+        await update.message.reply_text("Помилка завантаження документа-замінника. Зверніться до адміністратора.")
+        return AWAITING_STUDENT_ID
+
+    # Відправляємо повідомлення про успіх та запитуємо дату одним повідомленням[cite: 1]
+    await update.message.reply_text(
+        "Документ автоматично прикріплено.\n"
+        "Введіть дату дійсності вашого документа (наприклад, довідки) у форматі ДД.ММ.РРРР:",
+        reply_markup=get_back_keyboard()
+    )
+    
+    return AWAITING_STUDENT_VALID_UNTIL
 
 async def handle_student_valid_until(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     norm = normalize_date(update.message.text.strip())
@@ -399,7 +426,7 @@ async def handle_student_valid_until(update: Update, context: ContextTypes.DEFAU
     await update.message.reply_text("Надішліть 1 сторінку заяви.", reply_markup=get_back_keyboard())
     try:
         await context.bot.send_photo(chat_id=update.effective_chat.id,
-                                     photo=open("./examples/document_page_1_example.png", "rb"))
+                                     photo=open("./examples/document_page_1_example.jpg", "rb"))
     except:
         pass
     context.user_data["filled_forms"] = []
@@ -620,7 +647,8 @@ async def back_to_photo_3x4(update, context):
 
 
 async def back_to_student_id(update, context):
-    await update.message.reply_text("Надішліть фото студентського.", reply_markup=get_back_keyboard())
+    keyboard = get_back_keyboard([[btn.no_student_id]])
+    await update.message.reply_text("Надішліть фото студентського.", reply_markup=keyboard)
     return AWAITING_STUDENT_ID
 
 
@@ -723,6 +751,7 @@ def main():
             ],
             AWAITING_STUDENT_ID: [
                 MessageHandler(back_filter, back_to_photo_3x4),
+                MessageHandler(filters.Regex(f'^{re.escape(btn.no_student_id)}$'), handle_no_student_id),
                 MessageHandler(filters.PHOTO, handle_student_id),
                 MessageHandler(_no_cmd, _reject("Надішліть фото студентського квитка.")),
             ],

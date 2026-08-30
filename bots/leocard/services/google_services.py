@@ -60,6 +60,16 @@ def _authorize_fresh():
             "зі свіжим токеном (отримати локально через OAuth flow)."
         )
 
+def format_phone(phone: str) -> str:
+    """Форматує номер з +380XXXXXXXXX у (0XX) XXX XX XX"""
+    if not phone or phone == 'N/A':
+        return phone
+    # Виділяємо лише цифри
+    digits = ''.join(filter(str.isdigit, phone))
+    # Перевіряємо, чи це стандартний український номер (12 цифр, починається на 380)
+    if len(digits) == 12 and digits.startswith("380"):
+        return f"({digits[2:5]}) {digits[5:8]} {digits[8:10]} {digits[10:12]}"
+    return phone
 
 # --- Логіка авторизації OAuth 2.0 ---
 def get_credentials():
@@ -246,7 +256,7 @@ def add_user_to_party_sheet(worksheet, user_data: dict, pdf_url: str):
         row = [
             "", "",                                                     # A-B: номер, категорія
             surname, name, patronymic,                                  # C-E
-            user_data.get('phone_number', ''),                          # F: телефон
+            format_phone(user_data.get('phone_number', '')),                         # F: телефон
             passport_data.get('politech_email', ''),                    # G: email
             passport_data.get('residency_address', ''),                 # H: адреса
             "Україна", "",                                              # I-J: країна, індекс
@@ -295,7 +305,7 @@ def add_user_to_sheet(worksheet, user_data: dict, telegram_id: int, folder_url: 
 
         row = [
             str(telegram_id), surname, name, patronymic,
-            user_data.get('phone_number', 'N/A'),
+            format_phone(user_data.get('phone_number', 'N/A')),
             passport_data.get('politech_email', 'N/A'),
             passport_data.get('record_no', 'N/A'),
             passport_data.get('date_of_birth', 'N/A'),
