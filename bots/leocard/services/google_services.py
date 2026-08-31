@@ -61,15 +61,12 @@ def _authorize_fresh():
         )
 
 def format_phone(phone: str) -> str:
-    """Форматує номер з +380XXXXXXXXX у (0XX) XXX XX XX"""
+    """Форматує номер, залишаючи лише цифри (формат 380XXXXXXXXX)"""
     if not phone or phone == 'N/A':
         return phone
-    # Виділяємо лише цифри
+    # filter(str.isdigit) залишає лише цифри, автоматично прибираючи '+', пробіли чи дефіси
     digits = ''.join(filter(str.isdigit, phone))
-    # Перевіряємо, чи це стандартний український номер (12 цифр, починається на 380)
-    if len(digits) == 12 and digits.startswith("380"):
-        return f"({digits[2:5]}) {digits[5:8]} {digits[8:10]} {digits[10:12]}"
-    return phone
+    return digits
 
 # --- Логіка авторизації OAuth 2.0 ---
 def get_credentials():
