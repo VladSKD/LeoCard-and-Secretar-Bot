@@ -137,7 +137,7 @@ async def ask_previous_card(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return ConversationHandler.END
 
     await update.message.reply_text(msg.ask_assistance,
-                                    reply_markup=get_back_keyboard([[btn.help_me], [btn.do_myself]]))
+                                    reply_markup=get_back_keyboard([[btn.help_me]]))
     return SELECT_ASSISTANCE
 
 
