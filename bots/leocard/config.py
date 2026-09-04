@@ -65,7 +65,7 @@ class Buttons:
         self.master = "Магістр"
         self.yes = "Так"
         self.no = "Ні"
-        self.help_me = "Допоможи мені"
+        self.help_me = "Почнімо"
         self.do_myself = "Зроблю сам"
         self.back = "🔙 Назад"
         self.no_student_id = "В мене нема студентського"
