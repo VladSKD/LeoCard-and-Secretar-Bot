@@ -31,6 +31,8 @@ from telegram.ext import (
 )
 from config import BotConfig, GoogleConfig, FileNames, Messages, Buttons
 
+from telegram import ReplyKeyboardMarkup
+
 bot_config = BotConfig.from_env()
 google_config = GoogleConfig()
 fn = FileNames()
@@ -73,8 +75,9 @@ def ensure_google_auth_on_startup() -> None:
     AWAITING_FULL_NAME_CONFIRMATION, AWAITING_STUDENT_ID, AWAITING_POLITECH_EMAIL,
     AWAITING_PHONE_NUMBER, AWAITING_PHOTO_3X4, AWAITING_RESIDENCY_EXTRACT,
     AWAITING_FILLED_FORMS, AWAITING_PAYMENT_CHOICE, AWAITING_PAYMENT_RECEIPT,
-    AWAITING_STUDENT_VALID_UNTIL, AWAITING_CERTIFICATE_PHOTO,
-) = range(18)
+    AWAITING_STUDENT_VALID_UNTIL, AWAITING_CERTIFICATE_PHOTO, 
+    AWAITING_DOCUMENT_CHOICE 
+) = range(19) 
 
 
 # --- KLAVIATURY (Helper) ---
@@ -319,9 +322,27 @@ async def handle_photo_3x4(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await photo_file.download_to_memory(file_buffer)
     context.user_data[fn.photo_3x4] = file_buffer
     
-    # Додаємо кнопку "В мене нема студентського" до клавіатури
-    keyboard = get_back_keyboard([[btn.no_student_id]])
-    await update.message.reply_text("Надішліть фото студентського.", reply_markup=keyboard)
+    message_text = (
+        "Для оформлення ЛеоКарт вам потрібно надати один із документів:\n\n"
+        "💳 **Фізичний студентський квиток**\n"
+        "📄 **Довідка з ЄДЕБО** (у форматі А4 із QR-кодом у нижньому лівому куті, яку ви можете взяти в деканаті).\n\n"
+        "Оберіть, який документ у вас є:"
+    )
+    
+    # Додаємо клавіатуру з двома варіантами та кнопкою повернення
+    keyboard = ReplyKeyboardMarkup(
+        [["Студентський квиток", "Довідка з ЄДЕБО"], ["🔙 Назад"]], 
+        resize_keyboard=True
+    )
+    
+    await update.message.reply_text(message_text, reply_markup=keyboard, parse_mode="Markdown")
+    
+    return AWAITING_DOCUMENT_CHOICE
+
+
+async def handle_choice_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = get_back_keyboard()
+    await update.message.reply_text("Надішліть фото студентського квитка.", reply_markup=keyboard)
     
     try:
         await context.bot.send_photo(chat_id=update.effective_chat.id,
@@ -329,6 +350,18 @@ async def handle_photo_3x4(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     except:
         pass
     return AWAITING_STUDENT_ID
+
+
+async def handle_choice_certificate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    keyboard = get_back_keyboard()
+    await update.message.reply_text("Надішліть фото вашої довідки з ЄДЕБО (формат А4 із QR-кодом).", reply_markup=keyboard)
+    
+    try:
+        await context.bot.send_photo(chat_id=update.effective_chat.id, 
+                                     photo=open("examples/no_student_id_doc.jpg", "rb"))
+    except:
+        pass
+    return AWAITING_CERTIFICATE_PHOTO
 
 
 async def handle_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -380,17 +413,6 @@ async def handle_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return AWAITING_STUDENT_VALID_UNTIL
 
 
-async def handle_no_student_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("Надішліть фото вашої довідки (або іншого документа-замінника).", reply_markup=get_back_keyboard())
-    
-    # Надсилаємо приклад, як ви і просили
-    try:
-        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=open("examples/no_student_id_doc.jpg", "rb"))
-    except:
-        pass
-
-    return AWAITING_CERTIFICATE_PHOTO
-
 async def handle_certificate_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_file = await update.message.photo[-1].get_file()
     file_buffer = io.BytesIO()
@@ -405,6 +427,7 @@ async def handle_certificate_photo(update: Update, context: ContextTypes.DEFAULT
         reply_markup=get_back_keyboard()
     )
     return AWAITING_STUDENT_VALID_UNTIL
+
 
 async def handle_student_valid_until(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     norm = normalize_date(update.message.text.strip())
@@ -658,6 +681,22 @@ async def back_to_photo_3x4(update, context):
     return AWAITING_PHOTO_3X4  # <--- Виправлено тут (було X, має бути X, це константа)
 
 
+async def back_to_document_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    message_text = (
+        "Для оформлення ЛеоКарт вам потрібно надати один із документів:\n\n"
+        "💳 **Фізичний студентський квиток**\n"
+        "📄 **Довідка з ЄДЕБО**.\n\n"
+        "Оберіть, який документ у вас є:"
+    )
+    
+    keyboard = ReplyKeyboardMarkup(
+        [["Студентський квиток", "Довідка з ЄДЕБО"], ["🔙 Назад"]], 
+        resize_keyboard=True
+    )
+    
+    await update.message.reply_text(message_text, reply_markup=keyboard, parse_mode="Markdown")
+    return AWAITING_DOCUMENT_CHOICE
+
 async def back_to_student_id(update, context):
     keyboard = get_back_keyboard([[btn.no_student_id]])
     await update.message.reply_text("Надішліть фото студентського.", reply_markup=keyboard)
@@ -761,23 +800,32 @@ def main():
                 MessageHandler(filters.PHOTO, handle_photo_3x4),
                 MessageHandler(_no_cmd, _reject("Надішліть фото 3x4.")),
             ],
+            
+            # --- НОВИЙ СТАН ВИБОРУ ДОКУМЕНТА ---
+            AWAITING_DOCUMENT_CHOICE: [
+                MessageHandler(back_filter, back_to_photo_3x4), 
+                MessageHandler(filters.Regex("^Студентський квиток$"), handle_choice_student_id),
+                MessageHandler(filters.Regex("^Довідка з ЄДЕБО$"), handle_choice_certificate),
+                MessageHandler(_no_cmd, _reject("Оберіть документ за допомогою кнопок.")),
+            ],
+            # -----------------------------------
+            
             AWAITING_STUDENT_ID: [
-                MessageHandler(back_filter, back_to_photo_3x4),
-                MessageHandler(filters.Regex(f'^{re.escape(btn.no_student_id)}$'), handle_no_student_id),
+                MessageHandler(back_filter, back_to_document_choice), # Тепер назад веде на вибір документа
                 MessageHandler(filters.PHOTO, handle_student_id),
                 MessageHandler(_no_cmd, _reject("Надішліть фото студентського квитка.")),
             ],
             AWAITING_CERTIFICATE_PHOTO: [
-                MessageHandler(back_filter, back_to_student_id),
+                MessageHandler(back_filter, back_to_document_choice), # Тепер назад веде на вибір документа
                 MessageHandler(filters.PHOTO, handle_certificate_photo),
-                MessageHandler(_no_cmd, _reject("Надішліть фото довідки.")),
+                MessageHandler(_no_cmd, _reject("Надішліть фото довідки з ЄДЕБО.")),
             ],
             AWAITING_STUDENT_VALID_UNTIL: [
-                MessageHandler(back_filter, back_to_student_id),
+                MessageHandler(back_filter, back_to_document_choice), # Можна повертати на вибір документа, або на попередній етап (за бажанням)
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_student_valid_until),
             ],
             AWAITING_FILLED_FORMS: [
-                MessageHandler(back_filter, back_to_student_id),
+                MessageHandler(back_filter, back_to_document_choice), # Або back_to_student_id (залежить від того, куди ви хочете щоб користувач повертався)
                 MessageHandler(filters.PHOTO, handle_filled_forms),
                 MessageHandler(_no_cmd, _reject("Надішліть фото сторінки заяви.")),
             ],
@@ -813,5 +861,9 @@ def main():
     app.run_polling()
 
 
+
+
 if __name__ == "__main__":
     main()
+    
+    
