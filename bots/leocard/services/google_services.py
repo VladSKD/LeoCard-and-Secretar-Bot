@@ -60,6 +60,17 @@ def _authorize_fresh():
             "зі свіжим токеном (отримати локально через OAuth flow)."
         )
 
+def format_gender(gender_str: str) -> str:
+    """Нормалізує стать у формат 'Чоловіча' або 'Жіноча'"""
+    if not gender_str:
+        return ""
+    g = str(gender_str).strip().lower()
+    if any(m in g for m in ['чол', 'м', 'male', 'man', 'ч/м', 'ч']):
+        return "Чоловіча"
+    if any(f in g for f in ['жін', 'ж', 'female', 'woman', 'ж/ф']):
+        return "Жіноча"
+    return gender_str  # Якщо не розпізнало, лишає як є або повертає оригінал
+
 def format_phone(phone: str) -> str:
     """Форматує номер, залишаючи лише цифри (формат 380XXXXXXXXX)"""
     if not phone or phone == 'N/A':
@@ -220,7 +231,6 @@ def get_or_create_party_folder(drive_service, sheets_client, root_folder_id: str
     return new_party_folder_id, worksheet
 
 
-# --- Запис у таблицю партії ---
 def add_user_to_party_sheet(worksheet, user_data: dict, pdf_url: str):
     """Додає дані користувача в таблицю партії, згідно з шаблоном."""
     try:
@@ -239,34 +249,30 @@ def add_user_to_party_sheet(worksheet, user_data: dict, pdf_url: str):
         if street == 'N/A': street = ''
         if building_flat == 'N/A': building_flat = ''
 
-        # Якщо місто порожнє, але в адресі є Львів - ставимо Львів
         if not city and 'львів' in passport_data.get('residency_address', '').lower():
             city = 'Львів'
 
-        # Колонки згідно шаблону партії (A-X):
-        # A: Реєстр. номер, B: Категорія, C: Прізвище, D: Ім'я, E: По батькові,
-        # F: Телефон, G: Email, H: Адреса, I: Країна, J: Індекс,
-        # K: Місто, L: Вулиця, M: Будинок/кв, N: Зміст, O: Форма отримання,
-        # P: Адресовано до, Q: Коментар, R: Результат, S: ID (УНЗР),
-        # T: Посилання на документ, U: Дата народження, V: Стать,
-        # W: Профіль отримувача, X: Закінчення дії профіля
+        # Отримуємо та форматуємо УНЗР (Запис №) та стать
+        record_no = passport_data.get('record_no', '')
+        gender = format_gender(passport_data.get('gender', ''))
+
         row = [
-            "", "",                                                     # A-B: номер, категорія
-            surname, name, patronymic,                                  # C-E
-            format_phone(user_data.get('phone_number', '')),                         # F: телефон
-            passport_data.get('politech_email', ''),                    # G: email
-            passport_data.get('residency_address', ''),                 # H: адреса
-            "Україна", "",                                              # I-J: країна, індекс
-            city, street, building_flat,                                # K-M: місто, вулиця, буд.
-            "Отримання пільгової транспортної картки ЛеоКарт",          # N: зміст
-            "Особисто",                                                 # O: форма отримання
-            "", "", "",                                                 # P-R: адресовано, коментар, результат
-            passport_data.get('record_no', ''),                         # S: ID (УНЗР)
-            pdf_url or '',                                              # T: посилання на документ
-            passport_data.get('date_of_birth', ''),                     # U: дата народження
-            passport_data.get('gender', ''),                            # V: стать
-            user_data.get('level', ''),                                 # W: профіль отримувача
-            user_data.get("student_card_valid_until", ""),              # X: закінчення дії профіля
+            "", "",                                                     
+            surname, name, patronymic,                                  
+            format_phone(user_data.get('phone_number', '')),                         
+            passport_data.get('politech_email', ''),                    
+            passport_data.get('residency_address', ''),                 
+            "Україна", "",                                              
+            city, street, building_flat,                                
+            "Отримання пільгової транспортної картки ЛеоКарт",          
+            "Особисто",                                                 
+            "", "", "",                                                 
+            record_no,                                                  # S: ID (УНЗР / Запис №)
+            pdf_url or '',                                              
+            passport_data.get('date_of_birth', ''),                     
+            gender,                                                     # V: Стать ("Чоловіча" / "Жіноча")
+            user_data.get('level', ''),                                 
+            user_data.get("student_card_valid_until", ""),              
         ]
 
         all_values = worksheet.get_all_values()
@@ -282,6 +288,70 @@ def add_user_to_party_sheet(worksheet, user_data: dict, pdf_url: str):
         logger.info(f"Дані для користувача {full_name} додано в таблицю партії в рядок {insert_index}.")
     except Exception as e:
         logger.error(f"Помилка під час запису в таблицю партії: {e}", exc_info=True)
+        
+        
+# # --- Запис у таблицю партії ---
+# def add_user_to_party_sheet(worksheet, user_data: dict, pdf_url: str):
+#     """Додає дані користувача в таблицю партії, згідно з шаблоном."""
+#     try:
+#         passport_data = user_data.get('passport_data', {})
+#         full_name = passport_data.get('full_name', '').strip()
+#         parts = [p for p in full_name.split() if p]
+#         surname = parts[0] if len(parts) > 0 else ''
+#         name = parts[1] if len(parts) > 1 else ''
+#         patronymic = ' '.join(parts[2:]) if len(parts) > 2 else ''
+
+#         city = passport_data.get('city', '')
+#         street = passport_data.get('street', '')
+#         building_flat = passport_data.get('building_flat', '')
+
+#         if city == 'N/A': city = ''
+#         if street == 'N/A': street = ''
+#         if building_flat == 'N/A': building_flat = ''
+
+#         # Якщо місто порожнє, але в адресі є Львів - ставимо Львів
+#         if not city and 'львів' in passport_data.get('residency_address', '').lower():
+#             city = 'Львів'
+
+#         # Колонки згідно шаблону партії (A-X):
+#         # A: Реєстр. номер, B: Категорія, C: Прізвище, D: Ім'я, E: По батькові,
+#         # F: Телефон, G: Email, H: Адреса, I: Країна, J: Індекс,
+#         # K: Місто, L: Вулиця, M: Будинок/кв, N: Зміст, O: Форма отримання,
+#         # P: Адресовано до, Q: Коментар, R: Результат, S: ID (УНЗР),
+#         # T: Посилання на документ, U: Дата народження, V: Стать,
+#         # W: Профіль отримувача, X: Закінчення дії профіля
+#         row = [
+#             "", "",                                                     # A-B: номер, категорія
+#             surname, name, patronymic,                                  # C-E
+#             format_phone(user_data.get('phone_number', '')),                         # F: телефон
+#             passport_data.get('politech_email', ''),                    # G: email
+#             passport_data.get('residency_address', ''),                 # H: адреса
+#             "Україна", "",                                              # I-J: країна, індекс
+#             city, street, building_flat,                                # K-M: місто, вулиця, буд.
+#             "Отримання пільгової транспортної картки ЛеоКарт",          # N: зміст
+#             "Особисто",                                                 # O: форма отримання
+#             "", "", "",                                                 # P-R: адресовано, коментар, результат
+#             passport_data.get('record_no', ''),                         # S: ID (УНЗР)
+#             pdf_url or '',                                              # T: посилання на документ
+#             passport_data.get('date_of_birth', ''),                     # U: дата народження
+#             passport_data.get('gender', ''),                            # V: стать
+#             user_data.get('level', ''),                                 # W: профіль отримувача
+#             user_data.get("student_card_valid_until", ""),              # X: закінчення дії профіля
+#         ]
+
+#         all_values = worksheet.get_all_values()
+#         insert_index = 3
+#         for i, r in enumerate(all_values):
+#             if i >= 2 and (not r or (len(r) < 3 or (not r[0] and not r[2]))):
+#                 insert_index = i + 1
+#                 break
+#         else:
+#             insert_index = len(all_values) + 1
+
+#         worksheet.insert_row(row, index=insert_index, value_input_option='USER_ENTERED')
+#         logger.info(f"Дані для користувача {full_name} додано в таблицю партії в рядок {insert_index}.")
+#     except Exception as e:
+#         logger.error(f"Помилка під час запису в таблицю партії: {e}", exc_info=True)
 
 
 # --- Запис у загальну таблицю ---
@@ -300,13 +370,16 @@ def add_user_to_sheet(worksheet, user_data: dict, telegram_id: int, folder_url: 
         street = passport_data.get('street', 'N/A')
         building_flat = passport_data.get('building_flat', 'N/A')
 
+        record_no = passport_data.get('record_no', 'N/A')
+        gender = format_gender(passport_data.get('gender', 'N/A'))
+
         row = [
             str(telegram_id), surname, name, patronymic,
             format_phone(user_data.get('phone_number', 'N/A')),
             passport_data.get('politech_email', 'N/A'),
-            passport_data.get('record_no', 'N/A'),
+            record_no,                                                  # УНЗР / Запис №
             passport_data.get('date_of_birth', 'N/A'),
-            passport_data.get('gender', 'N/A'),
+            gender,                                                     # Стать ("Чоловіча" / "Жіноча")
             user_data.get("student_card_valid_until", "N/A"),
             user_data.get('photo_3x4_link', 'N/A'),
             folder_url,
@@ -319,7 +392,6 @@ def add_user_to_sheet(worksheet, user_data: dict, telegram_id: int, folder_url: 
         logger.info(f"Дані для користувача {telegram_id} успішно додано в загальну Google Sheet.")
     except Exception as e:
         logger.error(f"Помилка під час запису в загальну Google Sheet: {e}", exc_info=True)
-
 
 # --- Створення/отримання аркуша (ВИПРАВЛЕНО ТУТ) ---
 def get_or_create_worksheet(spreadsheet_name: str, worksheet_name: str, parent_folder_id: str):

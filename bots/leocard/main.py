@@ -71,13 +71,12 @@ def ensure_google_auth_on_startup() -> None:
 # --- СТАНИ ---
 (
     SELECT_LEVEL, SELECT_ASSISTANCE, ASK_PREVIOUS_CARD, AWAITING_PASSPORT_FRONT,
-    AWAITING_PASSPORT_BACK, AWAITING_TAX_ID_PHOTO, AWAITING_FULL_NAME,
+    AWAITING_PASSPORT_BACK, AWAITING_GENDER, AWAITING_RECORD_NO, AWAITING_TAX_ID_PHOTO, AWAITING_FULL_NAME,
     AWAITING_FULL_NAME_CONFIRMATION, AWAITING_STUDENT_ID, AWAITING_POLITECH_EMAIL,
     AWAITING_PHONE_NUMBER, AWAITING_PHOTO_3X4, AWAITING_RESIDENCY_EXTRACT,
     AWAITING_FILLED_FORMS, AWAITING_PAYMENT_CHOICE, AWAITING_PAYMENT_RECEIPT,
-    AWAITING_STUDENT_VALID_UNTIL, AWAITING_CERTIFICATE_PHOTO, 
-    AWAITING_DOCUMENT_CHOICE 
-) = range(19) 
+    AWAITING_STUDENT_VALID_UNTIL, AWAITING_CERTIFICATE_PHOTO, AWAITING_DOCUMENT_CHOICE
+) = range(21)
 
 
 # --- KLAVIATURY (Helper) ---
@@ -203,6 +202,7 @@ async def handle_passport_back(update: Update, context: ContextTypes.DEFAULT_TYP
     await photo_file.download_to_memory(file_buffer)
     context.user_data[fn.passport_back] = file_buffer
 
+    # Можемо спробувати витягнути дані звороту (якщо там є стать чи номер запису), але тепер запитуємо у користувача напряму
     file_buffer.seek(0)
     try:
         back_data = OCRService.extract_id_back(file_buffer)
@@ -211,8 +211,43 @@ async def handle_passport_back(update: Update, context: ContextTypes.DEFAULT_TYP
         back_data = {}
     context.user_data.setdefault("passport_data", {}).update({k: v for k, v in back_data.items() if v})
 
+    # Питаємо стать
+    await update.message.reply_text(
+        "Оберіть вашу стать:",
+        reply_markup=get_back_keyboard([["Чоловіча", "Жіноча"]])
+    )
+    return AWAITING_GENDER
+
+async def handle_gender(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    gender_text = update.message.text.strip()
+    if gender_text not in ["Чоловіча", "Жіноча"]:
+        await update.message.reply_text(
+            "Будь ласка, оберіть стать за допомогою кнопок.",
+            reply_markup=get_back_keyboard([["Чоловіча", "Жіноча"]])
+        )
+        return AWAITING_GENDER
+
+    # Зберігаємо стать (можна записувати як "Чоловіча"/"Жіноча" або "Ч"/"Ж")
+    context.user_data.setdefault("passport_data", {})["gender"] = gender_text
+
+    # Питаємо Запис № / УНЗР
+    await update.message.reply_text(
+        "Введіть ваш УНЗР (Запис № у форматі РРРРММДД-XXXXX):",
+        reply_markup=get_back_keyboard()
+    )
+    return AWAITING_RECORD_NO
+
+
+async def handle_record_no(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    record_no = update.message.text.strip()
+    
+    # Можна додати базову валідацію формату УНЗР, якщо потрібно, або просто зберегти
+    context.user_data.setdefault("passport_data", {})["record_no"] = record_no
+
+    # Після введення УНЗР переходимо до витягу з Дії (або куди у вас йде далі сценарій)
     await update.message.reply_text(msg.ask_residency, reply_markup=get_back_keyboard())
     return AWAITING_RESIDENCY_EXTRACT
+
 
 
 async def handle_residency_extract(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -642,6 +677,20 @@ async def back_to_passport_back(update, context):
     await update.message.reply_text("Надішліть фото зворотної сторони.", reply_markup=get_back_keyboard())
     return AWAITING_PASSPORT_BACK
 
+async def back_to_gender(update, context):
+    await update.message.reply_text(
+        "Оберіть вашу стать:",
+        reply_markup=get_back_keyboard([["Чоловіча", "Жіноча"]])
+    )
+    return AWAITING_GENDER
+
+
+async def back_to_record_no(update, context):
+    await update.message.reply_text(
+        "Введіть ваш УНЗР (Запис № у форматі РРРРММДД-XXXXX):",
+        reply_markup=get_back_keyboard()
+    )
+    return AWAITING_RECORD_NO
 
 async def back_to_residency(update, context):
     await update.message.reply_text(msg.ask_residency, reply_markup=get_back_keyboard())
@@ -765,6 +814,16 @@ def main():
                 MessageHandler(back_filter, back_to_passport_front),
                 MessageHandler(filters.PHOTO, handle_passport_back),
                 MessageHandler(_no_cmd, _reject("Надішліть фото зворотної сторони ID-картки.")),
+            ],
+            AWAITING_GENDER: [
+                MessageHandler(back_filter, back_to_passport_back), # Назад до звороту паспорта
+                MessageHandler(filters.Regex('^(Чоловіча|Жіноча)$'), handle_gender),
+                MessageHandler(_no_cmd, _reject("Оберіть стать кнопкою.")),
+            ],
+            AWAITING_RECORD_NO: [
+                MessageHandler(back_filter, back_to_gender), # Назад до вибору статі
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_record_no),
+                MessageHandler(_no_cmd, _reject("Введіть ваш УНЗР (Запис №).")),
             ],
             AWAITING_RESIDENCY_EXTRACT: [
                 MessageHandler(back_filter, back_to_passport_back),
