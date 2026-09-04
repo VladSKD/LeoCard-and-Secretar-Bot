@@ -60,16 +60,7 @@ def _authorize_fresh():
             "зі свіжим токеном (отримати локально через OAuth flow)."
         )
 
-def format_gender(gender_str: str) -> str:
-    """Нормалізує стать у формат 'Чоловіча' або 'Жіноча'"""
-    if not gender_str:
-        return ""
-    g = str(gender_str).strip().lower()
-    if any(m in g for m in ['чол', 'м', 'male', 'man', 'ч/м', 'ч']):
-        return "Чоловіча"
-    if any(f in g for f in ['жін', 'ж', 'female', 'woman', 'ж/ф']):
-        return "Жіноча"
-    return gender_str  # Якщо не розпізнало, лишає як є або повертає оригінал
+
 
 def format_phone(phone: str) -> str:
     """Форматує номер, залишаючи лише цифри (формат 380XXXXXXXXX)"""
@@ -254,7 +245,7 @@ def add_user_to_party_sheet(worksheet, user_data: dict, pdf_url: str):
 
         # Отримуємо та форматуємо УНЗР (Запис №) та стать
         record_no = passport_data.get('record_no', '')
-        gender = format_gender(passport_data.get('gender', ''))
+        gender = passport_data.get('gender', '')
 
         row = [
             "", "",                                                     
@@ -371,7 +362,7 @@ def add_user_to_sheet(worksheet, user_data: dict, telegram_id: int, folder_url: 
         building_flat = passport_data.get('building_flat', 'N/A')
 
         record_no = passport_data.get('record_no', 'N/A')
-        gender = format_gender(passport_data.get('gender', 'N/A'))
+        gender = passport_data.get('gender', '')
 
         row = [
             str(telegram_id), surname, name, patronymic,
