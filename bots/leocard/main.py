@@ -358,7 +358,7 @@ async def handle_choice_certificate(update: Update, context: ContextTypes.DEFAUL
     
     try:
         await context.bot.send_photo(chat_id=update.effective_chat.id, 
-                                     photo=open("examples/no_student_id_doc.jpg", "rb"))
+                                     photo=open("examples/no_student_id_doc_qr.jpg", "rb"))
     except:
         pass
     return AWAITING_CERTIFICATE_PHOTO
