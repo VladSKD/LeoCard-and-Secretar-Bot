@@ -263,7 +263,8 @@ def add_user_to_party_sheet(worksheet, user_data: dict, pdf_url: str):
             passport_data.get('date_of_birth', ''),                     
             gender,                                                     # V: Стать ("Чоловіча" / "Жіноча")
             user_data.get('level', ''),                                 
-            user_data.get("student_card_valid_until", ""),              
+            user_data.get("student_card_valid_until", ""), 
+            user_data.get('username', 'N/A'),             
         ]
 
         all_values = worksheet.get_all_values()
@@ -378,6 +379,7 @@ def add_user_to_sheet(worksheet, user_data: dict, telegram_id: int, folder_url: 
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             passport_data.get('tax_id', 'N/A'),
             user_data.get('level', 'N/A'),
+            user_data.get('username', 'N/A'),
         ]
         worksheet.append_row(row, value_input_option='USER_ENTERED')
         logger.info(f"Дані для користувача {telegram_id} успішно додано в загальну Google Sheet.")
@@ -405,7 +407,7 @@ def get_or_create_worksheet(spreadsheet_name: str, worksheet_name: str, parent_f
     def ensure_headers(ws):
         header = ["Telegram ID", "Прізвище", "Ім'я", "По батькові", "Телефон", "Електронна пошта", "УНЗР",
                   "Дата народження", "Стать", "Термін дійсності Студентського квитка", "Фото", "Скани документів",
-                  "Повна адреса", "Місто", "Вулиця", "Номер будинку, квартира", "дата", "РНОКПП", "Рівень освіти"]
+                  "Повна адреса", "Місто", "Вулиця", "Номер будинку, квартира", "дата", "РНОКПП", "Рівень освіти", "Тег Telegram"]
         try:
             first_row = ws.row_values(1)
             if not first_row:

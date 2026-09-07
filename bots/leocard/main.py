@@ -540,6 +540,9 @@ async def handle_payment_receipt(update: Update, context: ContextTypes.DEFAULT_T
 
     await update.message.reply_text("Обробка...", reply_markup=ReplyKeyboardRemove())
 
+    username = update.effective_user.username
+    context.user_data['username'] = f"@{username}" if username else "N/A"
+
     # --- Processing & Upload Logic ---
     try:
         all_files = {
