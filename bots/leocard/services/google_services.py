@@ -117,9 +117,13 @@ def get_sheets_client():
 
 # --- Допоміжні функції ---
 def find_file_by_name(service, name: str, parent_id: str, mime_type: str = None):
-    query = f"name='{name}' and '{parent_id}' in parents and trashed=false"
+    # Екрануємо апостроф зворотним слешем для Google Drive API
+    safe_name = name.replace("'", "\\'")
+    query = f"name='{safe_name}' and '{parent_id}' in parents and trashed=false"
+    
     if mime_type:
         query += f" and mimeType='{mime_type}'"
+        
     response = service.files().list(q=query, fields='files(id, name)', supportsAllDrives=True,
                                     includeItemsFromAllDrives=True).execute()
     files = response.get('files', [])
