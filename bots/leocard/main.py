@@ -208,16 +208,12 @@ async def handle_passport_back(update: Update, context: ContextTypes.DEFAULT_TYP
     # (Опційно тут може бути OCR зворотної сторони, якщо треба)
 
     # ОСЬ ТУТ замість переходу до витягу з Дії — питаємо УНЗР:
-    photo_path = "bots/leocard/examples/unzr_example.jpg" # Вкажіть точний шлях до вашої картинки
-
-    with open(photo_path, 'rb') as photo:
-        await update.message.reply_photo(
-            photo=photo,
-            caption="Введіть ваш Запис №/ Record No (УНЗР):",
-            reply_markup=get_back_keyboard()
-        )
+    await update.message.reply_photo(
+        photo=open("./examples/unzr_example.jpg", "rb"), 
+        caption="Введіть ваш Запис №/ Record No (УНЗР):",
+        reply_markup=get_back_keyboard()
+    )
     return AWAITING_RECORD_NO
-
 
 # --- ОСЬ ТУТ ПИШЕМО ТВОЇ ПРИКЛАДИ ---
 
