@@ -208,7 +208,14 @@ async def handle_passport_back(update: Update, context: ContextTypes.DEFAULT_TYP
     # (Опційно тут може бути OCR зворотної сторони, якщо треба)
 
     # ОСЬ ТУТ замість переходу до витягу з Дії — питаємо УНЗР:
-    await update.message.reply_text("Введіть ваш Рекорд Но (УНЗР):", reply_markup=get_back_keyboard())
+    photo_path = "bots/leocard/examples/unzr_example.jpg" # Вкажіть точний шлях до вашої картинки
+
+    with open(photo_path, 'rb') as photo:
+        await update.message.reply_photo(
+            photo=photo,
+            caption="Введіть ваш Запис №/ Record No (УНЗР):",
+            reply_markup=get_back_keyboard()
+        )
     return AWAITING_RECORD_NO
 
 
@@ -442,7 +449,7 @@ async def handle_certificate_photo(update: Update, context: ContextTypes.DEFAULT
 
     # Питаємо дату
     await update.message.reply_text(
-        "Документ збережено!\nВведіть дату дійсності вашого документа у форматі ДД.ММ.РРРР:",
+        "Документ збережено!\nВведіть дату дійсності вашого документа з ЄДЕБО/студентського у форматі ДД.ММ.РРРР:",
         reply_markup=get_back_keyboard()
     )
     return AWAITING_STUDENT_VALID_UNTIL
@@ -807,7 +814,7 @@ def main():
             AWAITING_RECORD_NO: [
                 MessageHandler(back_filter, back_to_passport_back),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_record_no),
-                MessageHandler(_no_cmd, _reject("Введіть ваш Рекорд Но текстом.")),
+                MessageHandler(_no_cmd, _reject("Введіть ваш Запис № / Record No текстом.")),
             ],
             AWAITING_GENDER: [
                 MessageHandler(back_filter, lambda u, c: handle_record_no(u, c)),
