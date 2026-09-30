@@ -471,7 +471,7 @@ async def handle_student_valid_until(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text("Невірний формат. Введіть ДД.ММ.РРРР.", reply_markup=get_back_keyboard())
         return AWAITING_STUDENT_VALID_UNTIL
     context.user_data["student_card_valid_until"] = norm
-    await update.message.reply_text("Надішліть 1 сторінку заяви.", reply_markup=get_back_keyboard())
+    await update.message.reply_text("Надішліть 1 сторінку заяви у форматі фото.", reply_markup=get_back_keyboard())
     try:
         await context.bot.send_photo(chat_id=update.effective_chat.id,
                                      photo=open("./examples/document_page_1_example.jpg", "rb"))
@@ -489,7 +489,7 @@ async def handle_filled_forms(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if len(forms) == 0:
         forms.append(file_buffer)
-        await update.message.reply_text("Отримано 1 сторінку. Надішліть 2 сторінку.", reply_markup=get_back_keyboard())
+        await update.message.reply_text("Отримано 1 сторінку. Надішліть 2 сторінку теж у форматі фото.", reply_markup=get_back_keyboard())
         
         # --- Додано відправку прикладу 2 сторінки ---
         try:
@@ -508,9 +508,9 @@ async def handle_filled_forms(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_payment_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.message.text == btn.yes:
-        await update.message.reply_text("Надішліть квитанцію.", reply_markup=get_back_keyboard())
+        await update.message.reply_text("Надішліть квитанцію у форматі pdf.", reply_markup=get_back_keyboard())
     else:
-        await update.message.reply_text(f"Оплатіть тут: {PAYMENT_URL}\nНадішліть квитанцію.",
+        await update.message.reply_text(f"Оплатіть тут: {PAYMENT_URL}\nНадішліть квитанцію у форматі pdf.",
                                         reply_markup=get_back_keyboard())
     return AWAITING_PAYMENT_RECEIPT
 
