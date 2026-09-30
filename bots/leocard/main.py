@@ -604,7 +604,7 @@ async def handle_payment_receipt(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data["photo_3x4_link"] = photo_url
         google_services.add_user_to_sheet(main_ws, context.user_data, update.effective_user.id, stud_folder_link)
 
-        await update.message.reply_text("Готово! Документи подано.")
+        await update.message.reply_text("Ваші документи було успішно надіслано та прийнято до обробки. Протягом двох тижнів на вашу електронну адресу буде надіслано повідомлення про готовність Леокарт. Після отримання цього повідомлення ви зможете забрати документ в 235 аудиторії  головного корпусу.")
 
         # Notify shared chats — minimal info only (no links, no personal data).
         try:
