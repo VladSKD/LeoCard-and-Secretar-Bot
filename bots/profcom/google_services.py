@@ -1,9 +1,6 @@
 import os
 import logging
-from google.auth.transport.requests import Request
-from google.auth.exceptions import RefreshError
 from google.oauth2.service_account import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
@@ -21,7 +18,6 @@ SHEET_HEADERS = [
     "Дата створення", "Дата заходу", "Статус"
 ]
 
-_auth_initialized = False
 _active_sheet_id = GOOGLE_SHEET_ID
 
 
@@ -30,53 +26,14 @@ def get_active_sheet_id() -> str:
     return _active_sheet_id or GOOGLE_SHEET_ID
 
 
-def _init_auth_files():
-    """Write env variables to auth files once per process.
-
-    Always overwrites existing files on first call to ensure
-    that environment variables (e.g. on Railway) take precedence
-    over any files that may exist in the working directory.
-    """
-    global _auth_initialized
-    if _auth_initialized:
-        return
-    _auth_initialized = True
-
-    for env_var, filename in [("GOOGLE_CREDENTIALS", "credentials.json"),
-                              ("GOOGLE_TOKEN", "token.json")]:
-        data = os.environ.get(env_var)
-        if data:
-            with open(filename, "w") as f:
-                f.write(data)
-
-
 def get_creds():
-    _init_auth_files()
-
-    creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except RefreshError as e:
-                logger.error(
-                    "Не вдалося оновити Google токен: %s\n"
-                    "Можливі причини:\n"
-                    "1. OAuth consent screen в Google Cloud Console в режимі 'Testing' "
-                    "(refresh token дійсний лише 7 днів)\n"
-                    "2. Токен було відкликано\n"
-                    "Рішення: згенеруйте новий token.json локально та оновіть "
-                    "змінну GOOGLE_TOKEN на Railway", e
-                )
-                raise
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open("token.json", "w") as token:
-            token.write(creds.to_json())
-    return creds
+    """Авторизація через Сервісний акаунт (без браузера і токенів)."""
+    try:
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+        return creds
+    except Exception as e:
+        logger.error(f"Не вдалося завантажити credentials.json: {e}")
+        raise RuntimeError("Перевірте наявність файлу credentials.json на сервері")
 
 
 def upload_petition_to_drive(file_path: str) -> str:

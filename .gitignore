@@ -1,6 +1,7 @@
 # Secrets
 .env
 *.env
+*.json
 !.env.example
 
 # Google OAuth dumps — never commit
