@@ -70,39 +70,16 @@ def format_phone(phone: str) -> str:
     digits = ''.join(filter(str.isdigit, phone))
     return digits
 
-# --- Логіка авторизації OAuth 2.0 ---
 def get_credentials():
-    _ensure_credentials_files()
-
-    creds = None
-    if os.path.exists(TOKEN_FILE):
-        try:
-            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-        except Exception:
-            creds = None
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except Exception as e:
-                logger.error(f"Не вдалося оновити токен: {e}")
-                # Truncate the invalid token file (os.remove fails on
-                # Docker bind-mounts with EBUSY, so we clear in-place).
-                try:
-                    with open(TOKEN_FILE, 'w') as f:
-                        f.truncate(0)
-                except OSError:
-                    pass
-                # Пробуємо отримати новий токен через OAuth flow
-                creds = _authorize_fresh()
-        else:
-            creds = _authorize_fresh()
-        if creds:
-            with open(TOKEN_FILE, 'w') as token:
-                token.write(creds.to_json())
-        else:
-            raise RuntimeError("Не вдалося отримати Google credentials.")
-    return creds
+    try:
+        creds = Credentials.from_service_account_file(
+            'credentials.json', 
+            scopes=SCOPES
+        )
+        return creds
+    except Exception as e:
+        print(f"Помилка завантаження credentials.json: {e}")
+        raise RuntimeError("Не вдалося отримати Google credentials. Перевір файл credentials.json")
 
 
 def get_drive_service():
